@@ -38,13 +38,30 @@
 
 Stellarcope targets the Stellar Community Fund RFP **Web and API Analytics for Stellar Ecosystem Projects**. The intended service combines internal Umami web analytics, OpenTelemetry-derived API metrics, verified project enrollment and verifiable daily summaries.
 
+## Early web pilot
+
+The `feat/pilot-implementation` branch prepares the existing web prototype for a small, manually onboarded cohort. Projects install a verification tag and pinned script and open a private web-only dashboard at `/pilot`. It reuses the current database and collector; the production Umami/queue architecture remains roadmap work.
+
+See the [pilot operator guide](engineering/pilot.md) for local setup, enrollment, domain checks, access rotation, validation, retention and offboarding. No deployment or real project enrollment is performed by the code change itself.
+
+```sh
+npm run pilot -- enroll --id example-project --name 'Example project' --domain example.org
+npm run pilot -- verify --id example-project
+```
+
+The CLI requires a configured database. It prints the completed snippet and private project access code to the invoking operator only. The tracker version is **1.0.1**, with integrity:
+
+```text
+sha384-jdJz1Fea69ia3b6WtkhrLxQ/lvDwtUQByhgTkrE53kNV3hNydNZX4ZHDfLqW03oB
+```
+
 ## Implementation status
 
 This repository contains a working legacy prototype, a tested build/dependency baseline, and the first production-service foundations. The complete production architecture is still being implemented.
 
 | | Area | Current state |
 |:-:|---|---|
-| 🟢 | Legacy web prototype | Tracker, filtering, custom PostgreSQL reports, dashboards and operator/public-card UI are present. Legacy 202 responses do not prove durable acceptance. |
+| 🟢 | Legacy web prototype | Tracker, filtering, custom PostgreSQL reports, dashboards and operator/public-card UI are present. The deployed database sink now acknowledges after commit; the standalone spool remains best effort. |
 | 🟢 | Seals and proofs | Merkle summaries, inclusion proofs and Stellar anchoring code are present. Local tests verify signing with controlled Horizon responses. |
 | 🟢 | New event contract | Strict versioned web payload validation and tenant/site-scoped receipt identities are implemented. |
 | 🟡 | New ingress skeleton | Separate public/private Fastify listeners, configuration validation, health, body limits, generic errors and shutdown are implemented. Readiness remains 503; ingestion placeholders accept no data. |
@@ -66,7 +83,7 @@ npm run check          # types, lint, formatting, local tests and build
 npm run dev            # Vite frontend on localhost:5173
 ```
 
-Both frontend development and preview proxy `/api` requests to the remote prototype configured in [vite.config.ts](vite.config.ts). They are not fully local backend environments. The automated tests use controlled fixtures/local servers; they do not need a live database, Docker or Stellar submission credentials.
+Frontend development and preview proxy `/api` and `/e` to the local pilot backend on port 8787 by default. Run `npm run start:pilot` with a disposable database and `PILOT_ORIGIN=http://localhost:5173`; see [pilot setup](engineering/pilot.md). No test events are sent to the remote prototype by default. The automated tests use controlled fixtures/local servers; they do not need a live database, Docker or Stellar submission credentials.
 
 Run the new, independent service in another terminal:
 

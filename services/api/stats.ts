@@ -24,8 +24,8 @@ function fill(rows: { d: Date | string; v: number | string }[], days: number, no
   })
 }
 
-const shares = (rows: { label: string | null; v: number | string }[], fallback = 'Unknown'): Share[] => {
-  const total = rows.reduce((a, r) => a + Number(r.v), 0) || 1
+const shares = (rows: { label: string | null; v: number | string }[], fallback = 'Unknown', denominator?: number): Share[] => {
+  const total = (denominator ?? rows.reduce((a, r) => a + Number(r.v), 0)) || 1
   return rows.map((r) => ({ label: r.label ?? fallback, value: Number(r.v), share: Number(r.v) / total }))
 }
 
@@ -70,18 +70,19 @@ export async function webStats(sql: Sql, sites: string[], days: number) {
   const visitors = fill(daily.rows.map((r) => ({ d: r.d, v: r.v })), days)
   const pageviews = fill(daily.rows.map((r) => ({ d: r.d, v: r.pv })), days)
   const total = visitors.reduce((a, b) => a + b.value, 0)
+  const totalPageviews = pageviews.reduce((a, b) => a + b.value, 0)
   const s = sessions.rows[0]
   return {
     visitors,
     pageviewSeries: pageviews,
     total,
-    pageviews: pageviews.reduce((a, b) => a + b.value, 0),
+    pageviews: totalPageviews,
     delta: prev.rows[0].v ? total / prev.rows[0].v - 1 : null,
     bounce: s.visits ? s.bounces / s.visits : null,
     session: Math.round(s.avg_s),
-    pages: shares(pages.rows),
-    referrers: shares(refs.rows),
-    countries: shares(countries.rows),
+    pages: shares(pages.rows, 'Unknown', totalPageviews),
+    referrers: shares(refs.rows, 'Unknown', totalPageviews),
+    countries: shares(countries.rows, 'Unknown', totalPageviews),
     devices: shares(devices.rows),
     browsers: shares(browsers.rows),
     events: shares(events.rows),

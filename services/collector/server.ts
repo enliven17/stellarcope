@@ -6,14 +6,15 @@ import { DailySalt, visitorId } from '../../packages/core/session.ts'
 import type { Spool } from '../shared/spool.ts'
 import type { SiteRegistry } from '../shared/sites.ts'
 import { parseUa } from './ua.ts'
+import { campaign, PERSONAL, webPath } from '../../packages/core/privacy.ts'
 
-// Web ingestion. Validates, filters and spools; it never touches the database on the hot
-// path. Every POST gets 202 whatever happened, so the response reveals nothing to a scraper.
+// Await the configured sink before acknowledging. The deployed sink commits to PostgreSQL;
+// the standalone spool remains a best-effort prototype buffer.
 
 const MAX_BODY = 8 * 1024
 const TRACKER_DIR = new URL('../../packages/tracker/dist/', import.meta.url)
 
-type Sink = Pick<Spool, 'push'>
+type Sink = { push(record: Parameters<Spool['push']>[0]): void | Promise<unknown> }
 type Salt = { current(now?: number): Buffer | Promise<Buffer> }
 type Deps = { sites: SiteRegistry; spool: Sink; salt?: Salt; limiter?: RateLimiter; now?: () => number }
 
@@ -32,44 +33,42 @@ type Incoming = {
 }
 
 const str = (v: unknown, max: number) => (typeof v === 'string' && v.length <= max ? v : undefined)
+const campaignEvent = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(value) && !PERSONAL.some((pattern) => pattern.test(value))
 
 /** strict shape check at the trust boundary; anything unexpected is rejected */
 export function parsePayload(raw: string): Incoming | null {
   let j: Record<string, unknown>
   try { j = JSON.parse(raw) } catch { return null }
-  if (!j || typeof j !== 'object') return null
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return null
+  if (Object.keys(j).some((key) => !['site','type','name','props','path','hostname','referrer','utm','screen','lang','webdriver'].includes(key))) return null
   const site = str(j.site, 64)
-  const path = str(j.path, 2048)
+  const rawPath = str(j.path, 2048)
+  const path = rawPath ? webPath(rawPath) : null
   const hostname = str(j.hostname, 253)
   const type = j.type === 'pageview' || j.type === 'event' ? j.type : null
   if (!site || !path || !hostname || !type || !path.startsWith('/')) return null
-  if (type === 'event' && !str(j.name, 64)) return null
+  if (type === 'event' && !campaignEvent(j.name)) return null
   const screen = j.screen as { w?: unknown; h?: unknown } | undefined
   return {
     site, type, path, hostname,
-    name: str(j.name, 64),
-    props: scrubProps(j.props),
+    name: type === 'event' ? str(j.name, 64) : undefined,
+    props: type === 'event' ? scrubProps(j.props) : undefined,
     referrer: str(j.referrer, 512),
-    utm: j.utm && typeof j.utm === 'object' ? Object.fromEntries(Object.entries(j.utm as object).filter(([k, v]) => ['source', 'medium', 'campaign'].includes(k) && typeof v === 'string').map(([k, v]) => [k, (v as string).slice(0, 100)])) : undefined,
+    utm: j.utm && typeof j.utm === 'object' ? Object.fromEntries(Object.entries(j.utm as object).filter(([k, v]) => ['source', 'medium', 'campaign'].includes(k) && campaign(v))) as Record<string, string> : undefined,
     screen: screen && Number.isFinite(screen.w) && Number.isFinite(screen.h) ? { w: Number(screen.w), h: Number(screen.h) } : undefined,
     lang: str(j.lang, 35),
     webdriver: j.webdriver === true,
   }
 }
 
-const PERSONAL = [
-  /[^\s@]+@[^\s@]+\.[^\s@]+/, // email
-  /\b[GMCS][A-Z2-7]{55,68}\b/, // stellar account, muxed, contract or secret
-  /\+?\d[\d\s().-]{8,}\d/, // phone like
-]
-
 /** custom event props: flat, small, and with personal looking values masked */
 export function scrubProps(props: unknown): Record<string, string | number | boolean> | undefined {
   if (!props || typeof props !== 'object' || Array.isArray(props)) return undefined
   const out: Record<string, string | number | boolean> = {}
   for (const [k, v] of Object.entries(props).slice(0, 20)) {
-    if (k.length > 40) continue
-    if (typeof v === 'number' || typeof v === 'boolean') out[k] = v
+    if (!/^[A-Za-z][A-Za-z0-9_.:-]{0,39}$/.test(k)) continue
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = PERSONAL.some((pattern) => pattern.test(String(v))) ? '[masked]' : v
+    else if (typeof v === 'boolean') out[k] = v
     else if (typeof v === 'string') out[k] = PERSONAL.some((re) => re.test(v)) ? '[masked]' : v.slice(0, 200)
   }
   return Object.keys(out).length ? out : undefined
@@ -92,13 +91,14 @@ async function body(req: IncomingMessage) {
   const pre = (req as IncomingMessage & { body?: unknown }).body
   if (pre !== undefined && pre !== null) {
     const text = typeof pre === 'string' ? pre : Buffer.isBuffer(pre) ? pre.toString('utf8') : JSON.stringify(pre)
-    return text.length > MAX_BODY ? null : text
+    if (Buffer.byteLength(text) > MAX_BODY) throw Object.assign(new Error(), { status: 413 })
+    return text
   }
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
     size += (chunk as Buffer).length
-    if (size > MAX_BODY) return null
+    if (size > MAX_BODY) throw Object.assign(new Error(), { status: 413 })
     chunks.push(chunk as Buffer)
   }
   return Buffer.concat(chunks).toString('utf8')
@@ -112,9 +112,9 @@ export function collector({ sites, spool, salt = new DailySalt(), limiter = new 
   async function ingest(req: IncomingMessage) {
     const raw = await body(req)
     const p = raw && parsePayload(raw)
-    if (!p) return void stats.invalid++
+    if (!p) { stats.invalid++; return 400 }
     const site = await sites.lookup(p.site)
-    if (!site) return void stats.invalid++
+    if (!site) { stats.invalid++; return 400 }
 
     const t = now()
     const ip = clientIp(req)
@@ -132,13 +132,13 @@ export function collector({ sites, spool, salt = new DailySalt(), limiter = new 
     }, site.domains)
 
     if (reason) {
+      await spool.push({ kind: 'drop', site: p.site, day, reason })
       stats.dropped++
-      return spool.push({ kind: 'drop', site: p.site, day, reason })
+      return reason === 'rate' ? 429 : 403
     }
-    stats.accepted++
     let referrer: string | null = null
     try { referrer = p.referrer ? new URL(p.referrer).hostname.replace(/^www\./, '') : null } catch { referrer = null }
-    spool.push({
+    await spool.push({
       kind: 'event', site: p.site, tenant: site.tenantId, ts: new Date(t).toISOString(),
       data: {
         type: p.type, name: p.name ?? null, path: p.path, referrer,
@@ -146,6 +146,8 @@ export function collector({ sites, spool, salt = new DailySalt(), limiter = new 
         country: country(req), ...parseUa(ua), visitor: visitorId(await salt.current(t), p.site, ip, ua), props: p.props ?? null,
       },
     })
+    stats.accepted++
+    return 202
   }
 
   async function tracker(res: ServerResponse, version: string) {
@@ -174,8 +176,11 @@ export function collector({ sites, spool, salt = new DailySalt(), limiter = new 
     if (url.pathname === '/e') {
       if (req.method === 'OPTIONS') return end(res, 204, CORS)
       if (req.method !== 'POST') return end(res, 405, CORS)
-      try { await ingest(req) } catch (err) { console.error('ingest failed', err) }
-      return end(res, 202, CORS)
+      try { return end(res, await ingest(req), CORS) } catch (error) {
+        const oversized = (error as { status?: number }).status === 413
+        if (!oversized) console.error('collection storage failed')
+        return end(res, oversized ? 413 : 503, { ...CORS, 'cache-control': 'no-store', ...(oversized ? {} : { 'retry-after': '60' }) })
+      }
     }
     const t = url.pathname.match(/^\/t\/([^/]+)\/a\.js$/)
     if (t && req.method === 'GET') return tracker(res, t[1])

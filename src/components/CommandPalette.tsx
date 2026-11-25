@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { getLenis, reducedMotion } from '../lib/smooth'
 import { REPO } from '../lib/site'
+import { TRACKER } from '../../packages/tracker/release'
 
 type Command = { id: string; label: string; hint: string; run: () => void }
 
 /** page level commands are announced with this event, e.g. switching a dashboard tab */
 export const emit = (action: string, value?: string) => window.dispatchEvent(new CustomEvent('stellarcope:cmd', { detail: { action, value } }))
 
-const SNIPPET = '<script defer src="https://stellarcope.xyz/t/1.0.0/a.js" data-site="YOUR_SITE_ID"></script>'
+const SNIPPET = `<script defer src="https://stellarcope.xyz${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" data-site="YOUR_SITE_ID"></script>`
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -23,6 +24,7 @@ export default function CommandPalette() {
     const go = (to: string) => () => navigate(to)
     return [
       { id: 'tenant', label: 'Open tenant dashboard', hint: 'view', run: go('/demo') },
+      { id: 'pilot', label: 'Open my private dashboard', hint: 'view', run: go('/pilot') },
       { id: 'operator', label: 'Open operator view', hint: 'view', run: go('/operator') },
       { id: 'card', label: 'Open public card', hint: 'view', run: go('/p/stellarcope') },
       { id: 'docs', label: 'Read the docs', hint: 'docs', run: go('/docs') },

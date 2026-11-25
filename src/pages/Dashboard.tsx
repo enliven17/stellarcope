@@ -11,6 +11,7 @@ import { DitherCells, DitherHeatmap } from '../components/dash/DitherGrid'
 import { Funnel, LiveStream, RankList } from '../components/dash/lists'
 import { useApi, type Point, type Seal, type Stats } from '../lib/api'
 import { dur, explorerTx, ms, pct, short } from '../lib/format'
+import { TRACKER } from '../../packages/tracker/release'
 
 const RANGES = ['7d', '30d', '90d'] as const
 const VIEWS = ['Web', 'API', 'Wallets', 'Trust'] as const
@@ -31,12 +32,12 @@ function Kpi({ label, value, format, note, tone, series, sparkTone = 'gold' }: {
   )
 }
 
-function WebView({ s, tenant }: { s: Stats; tenant: string }) {
+function WebView({ s, tenant, pilot = false }: { s: Stats; tenant: string; pilot?: boolean }) {
   const w = s.web
   return (
     <div className="grid gap-4 lg:grid-cols-12">
       <Card className="p-6 lg:col-span-8">
-        <CardHead title="Visitors" meta={
+        <CardHead title={pilot ? "Daily visitors" : "Visitors"} meta={
           <div className="flex items-baseline gap-3">
             <AnimatedNumber value={w.total} className="text-[clamp(2.4rem,4vw,3.6rem)] leading-none" />
             <span className={`font-mono text-[12px] ${w.delta === null ? 'text-dim' : w.delta >= 0 ? 'text-gold' : 'text-bad'}`}>
@@ -45,11 +46,12 @@ function WebView({ s, tenant }: { s: Stats; tenant: string }) {
           </div>
         } />
         <div className="mt-6"><DitherArea data={w.visitors} tone="gold" height={250} name="visitors" /></div>
+        {pilot && <p className="mt-3 font-mono text-[11px] text-dim">Daily visitor counts summed across this range. A returning person may count on multiple days.</p>}
       </Card>
       <div className="grid gap-4 lg:col-span-4">
-        <Kpi label="Page views" value={w.pageviews} series={w.pageviewSeries} note={w.total ? `${(w.pageviews / w.total).toFixed(2)} per visitor` : 'no visits yet'} />
-        <Kpi label="Bounce rate" value={w.bounce} format={(n) => pct(n)} note="single page visits" />
-        <Kpi label="Average visit" value={w.session} format={(n) => dur(Math.round(n))} note="first to last event of a visit" />
+        <Kpi label="Page views" value={w.pageviews} series={w.pageviewSeries} note={w.total ? `${(w.pageviews / w.total).toFixed(2)} per visitor-day` : 'no pageviews in this range'} />
+        {!pilot && <Kpi label="Bounce rate" value={w.bounce} format={(n) => pct(n)} note="single page visits" />}
+        {!pilot && <Kpi label="Average visit" value={w.session} format={(n) => dur(Math.round(n))} note="first to last event of a visit" />}
       </div>
 
       <Card className="p-6 lg:col-span-7">
@@ -60,7 +62,7 @@ function WebView({ s, tenant }: { s: Stats; tenant: string }) {
 
       <Card className="p-6 lg:col-span-4">
         <CardHead title="Devices" />
-        <div className="mt-6"><DitherDonut slices={w.devices} center={{ value: w.total, label: 'visitors' }} /></div>
+        <div className="mt-6"><DitherDonut slices={w.devices} center={{ value: w.devices.reduce((n,d) => n+d.value, 0), label: 'pageviews' }} /></div>
       </Card>
       <Card className="p-6 lg:col-span-4">
         <CardHead title="Browsers" />
@@ -79,10 +81,10 @@ function WebView({ s, tenant }: { s: Stats; tenant: string }) {
         <CardHead title="Referrers" />
         <div className="mt-6"><RankList rows={w.referrers} tone="ink" limit={8} /></div>
       </Card>
-      <Card className="p-6 lg:col-span-12">
+      {!pilot && <Card className="p-6 lg:col-span-12">
         <CardHead title="Custom events" meta={<span className="font-mono text-[11px] text-dim">window.stellarcope.track(name, props)</span>} />
         <div className="mt-6"><RankList rows={w.events} tone="blue" empty="No custom events tracked yet" /></div>
-      </Card>
+      </Card>}
     </div>
   )
 }
@@ -199,31 +201,33 @@ function TrustView({ s, tenant }: { s: Stats; tenant: string }) {
   )
 }
 
-export default function Dashboard() {
+export default function Dashboard({ pilotTenant, onSignOut }: { pilotTenant?: string; onSignOut?: () => void } = {}) {
   const [params] = useSearchParams()
-  const tenant = params.get('tenant') ?? 'stellarcope'
+  const tenant = pilotTenant ?? params.get('tenant') ?? 'stellarcope'
+  const pilot = !!pilotTenant
+  const views = pilot ? (['Web'] as const) : VIEWS
   const [range, setRange] = useState<(typeof RANGES)[number]>('30d')
   const [view, setView] = useState<View>('Web')
   const days = Number(range.replace('d', ''))
-  const { data, error, loading } = useApi<Stats>(`/api/stats?tenant=${tenant}&days=${days}`, 30_000)
+  const { data, error, loading, updatedAt } = useApi<Stats>(`/api/stats?tenant=${encodeURIComponent(tenant)}&days=${days}`, 30_000)
 
   useEffect(() => { document.title = `${data?.tenant.name ?? 'Dashboard'} on Stellarcope` }, [data])
   useEffect(() => {
     const on = (e: Event) => {
       const { action, value } = (e as CustomEvent<{ action: string; value: string }>).detail
-      if (action === 'tab' && VIEWS.includes(value as View)) setView(value as View)
+      if (action === 'tab' && views.includes(value as 'Web')) setView(value as View)
       if (action === 'range' && RANGES.includes(`${value}d` as (typeof RANGES)[number])) setRange(`${value}d` as (typeof RANGES)[number])
     }
     window.addEventListener('stellarcope:cmd', on)
     return () => window.removeEventListener('stellarcope:cmd', on)
-  }, [])
+  }, [pilot])
 
   const domain = data?.trust.domains.find((d) => d.verified)?.domain
 
   return (
     <>
       <Nav />
-      <DemoTabs note={loading && data ? 'refreshing' : 'live data'} />
+      {pilot ? <div className="hair border-b pt-16"><div className="mx-auto flex h-12 max-w-[1440px] items-center justify-between px-4 sm:px-8"><span className="label text-gold">Web analytics · early access</span><button className="font-mono text-[12px] text-mute hover:text-ink" onClick={onSignOut}>Sign out</button></div></div> : <DemoTabs note={loading && data ? 'refreshing' : 'live data'} />}
       <main id="main" className="mx-auto max-w-[1440px] px-4 pb-24 pt-10 sm:px-8">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -231,8 +235,8 @@ export default function Dashboard() {
             <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[12px] text-mute">
               {domain && <span className="text-ink">{domain}</span>}
               {data && <span><Check on={data.trust.checks.origin} /> origin bound</span>}
-              {data && <span><Check on={data.trust.checks.sealed} /> sealed on Stellar</span>}
-              {data && <span>trust {data.trust.score}</span>}
+              {data && !pilot && <span><Check on={data.trust.checks.sealed} /> sealed on Stellar</span>}
+              {data && !pilot && <span>trust {data.trust.score}</span>}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -241,9 +245,15 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        <div className="mt-8"><AnimatedTabs tabs={VIEWS} value={view} onChange={setView} label="Views" /></div>
+        <div className="mt-8"><AnimatedTabs tabs={views} value={view} onChange={setView} label="Views" /></div>
 
+        {pilot && data && <div className="hair mt-8 border-y py-5">
+          <p className="text-sm">{!data.trust.checks.origin ? 'Waiting for domain verification. Contact us to finish setup.' : data.collection?.lastEventAt ? `Last pageview received ${new Date(data.collection.lastEventAt).toLocaleString()}.` : 'Domain verified. Install the snippet, visit your site, then check the live panel below.'}</p>
+          <details className="mt-3"><summary className="cursor-pointer font-mono text-[12px] text-mute">Installation snippet</summary><pre className="hair mt-3 overflow-x-auto border bg-panel p-4 font-mono text-[11px] text-mute">{data.sites?.[0] ? `<script defer src="${window.location.origin}${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" data-site="${data.sites[0]}"></script>` : 'Contact us to register your website.'}</pre></details>
+          <p className="mt-3 font-mono text-[11px] text-dim">{updatedAt ? `Dashboard updated ${new Date(updatedAt).toLocaleTimeString()}. ` : ''}Automatic refresh every 30 seconds. Collection status is based on stored pageviews.</p>
+        </div>}
         <div className="mt-6">
+          {error && data && <p role="alert" className="hair mb-5 border border-[var(--color-gold)] p-4 text-sm">Refresh failed: {error}. Showing the last successful response.</p>}
           {error && !data && <Card className="p-6"><p className="text-sm text-mute">Could not load live data: {error}</p></Card>}
           {!data && !error && (
             <div className="grid gap-4 lg:grid-cols-12">
@@ -253,10 +263,10 @@ export default function Dashboard() {
           <AnimatePresence mode="wait">
             {data && (
               <motion.div key={view} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-                {view === 'Web' && <WebView s={data} tenant={tenant} />}
-                {view === 'API' && <ApiView s={data} />}
-                {view === 'Wallets' && <WalletsView s={data} />}
-                {view === 'Trust' && <TrustView s={data} tenant={tenant} />}
+                {view === 'Web' && <WebView s={data} tenant={tenant} pilot={pilot} />}
+                {!pilot && view === 'API' && <ApiView s={data} />}
+                {!pilot && view === 'Wallets' && <WalletsView s={data} />}
+                {!pilot && view === 'Trust' && <TrustView s={data} tenant={tenant} />}
               </motion.div>
             )}
           </AnimatePresence>
