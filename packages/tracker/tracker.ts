@@ -30,10 +30,11 @@ function blocked() {
 }
 
 function send(p: Payload) {
-  const body = JSON.stringify(p)
-  // text/plain keeps the request simple, so no CORS preflight
-  if (navigator.sendBeacon?.(opts!.endpoint, new Blob([body], { type: 'text/plain' }))) return
-  fetch(opts!.endpoint, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(() => {})
+  try {
+    // Omit dashboard credentials even when the analytics host is first party.
+    // No automatic retries: legacy payloads do not carry a replay identity.
+    fetch(opts!.endpoint, { method: 'POST', body: JSON.stringify(p), keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' } }).catch(() => {})
+  } catch { /* analytics must never interrupt the host application */ }
 }
 
 function base(type: Payload['type']): Payload {
@@ -64,16 +65,20 @@ function base(type: Payload['type']): Payload {
 }
 
 export function pageview() {
-  if (blocked()) return
-  const path = location.pathname
-  if (path === lastPath) return
-  lastPath = path
-  send(base('pageview'))
+  try {
+    if (blocked()) return
+    const path = location.pathname
+    if (path === lastPath) return
+    lastPath = path
+    send(base('pageview'))
+  } catch { /* a blocked browser API must not interrupt navigation */ }
 }
 
 export function track(name: string, props?: Props) {
-  if (blocked() || !name) return
-  send({ ...base('event'), name: name.slice(0, 64), props })
+  try {
+    if (blocked() || !name) return
+    send({ ...base('event'), name: name.slice(0, 64), props })
+  } catch { /* optional tracking must not interrupt an action */ }
 }
 
 /** starts page view tracking, single page app navigations included */
@@ -88,9 +93,9 @@ export function init(o: Options) {
       return r
     }
   }
-  wrap('pushState')
-  wrap('replaceState')
+  try { wrap('pushState') } catch { /* some hosts lock History methods */ }
+  try { wrap('replaceState') } catch { /* initial pageviews still work */ }
   addEventListener('popstate', pageview)
-  if (document.readyState === 'complete') pageview()
-  else addEventListener('load', pageview, { once: true })
+  if (document.readyState !== 'loading') pageview()
+  else addEventListener('DOMContentLoaded', pageview, { once: true })
 }

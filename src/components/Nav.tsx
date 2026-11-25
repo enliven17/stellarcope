@@ -66,6 +66,7 @@ export default function Nav() {
           <div className="flex items-center gap-5">
             <span className="hidden font-mono text-[11px] text-dim xl:inline" aria-label="Coordinated universal time">UTC {clock}</span>
             <Link to="/docs" className="hidden font-mono text-[12px] text-mute transition-colors hover:text-ink sm:inline">Docs</Link>
+            <Link to="/pilot" className="hidden font-mono text-[12px] text-mute transition-colors hover:text-ink sm:inline">My dashboard</Link>
             <a href={REPO} target="_blank" rel="noreferrer" className="hidden font-mono text-[12px] text-mute transition-colors hover:text-ink md:inline">GitHub</a>
             <Link to="/demo" className="btn btn-solid hidden h-9 sm:inline-flex">Live demo <span className="arrow">→</span></Link>
             <button type="button" className="font-mono text-[12px] text-ink lg:hidden" aria-expanded={open} aria-controls="menu-sheet" onClick={() => setOpen((v) => !v)}>
@@ -80,6 +81,7 @@ export default function Nav() {
           <div className="overflow-hidden">
             <div data-item className="flex flex-wrap gap-3">
               <Link to="/demo" onClick={() => setOpen(false)} className="btn btn-solid">Live demo <span className="arrow">→</span></Link>
+              <Link to="/pilot" onClick={() => setOpen(false)} className="btn">My dashboard <span className="arrow">→</span></Link>
               <Link to="/operator" onClick={() => setOpen(false)} className="btn">Operator view</Link>
               <Link to="/docs" onClick={() => setOpen(false)} className="btn">Docs</Link>
               <a href={REPO} target="_blank" rel="noreferrer" className="btn">GitHub</a>

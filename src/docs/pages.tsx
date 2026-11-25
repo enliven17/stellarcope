@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
+import { TRACKER } from '../../packages/tracker/release'
 import { A, C, Code, H2, List, Note, P, Table } from './kit'
 
 export type DocPage = { slug: string; group: string; title: string; lead: string; body: ReactNode }
 
 const HOST = 'https://stellarcope.xyz'
-const SRI = 'sha384-Bojht8aEcX48AVJBF54vUubF9KBOHvNBMC5Cph1gi8AEJMJbc0xFa16aS/xZDokK'
+const SRI = TRACKER.integrity
 
 export const PAGES: DocPage[] = [
   {
@@ -33,16 +34,16 @@ export const PAGES: DocPage[] = [
     slug: 'quickstart', group: 'Getting started', title: 'Quickstart',
     lead: 'From enrollment to the first event in a few minutes.',
     body: <>
-      <Note kind="status">Self service enrollment with a Stellar wallet ships in the next milestone. Until then, enrollment is done on request: open an issue on the <A to="https://github.com/enliven17/stellarcope/issues">repository</A> with your project name and domain.</Note>
+      <Note kind="status">The early web pilot uses assisted onboarding. Wallet sign-in and self-service enrollment are planned. To request access, open an issue on the <A to="https://github.com/enliven17/stellarcope/issues">repository</A> with your project name and domain. We provide your verification tag, completed snippet and private dashboard access code.</Note>
       <H2>1. Get a site id</H2>
       <P>Each enrolled project gets a tenant id and one or more site ids. The site id is public and goes into the script tag.</P>
       <H2>2. Verify your domain</H2>
       <P>Add the meta tag you receive to the head of your site, or one of the other methods in <A to="/docs/domain-verification">domain verification</A>. Events from unverified origins are refused.</P>
       <Code file="index.html" code={'<meta name="stellarcope-verify" content="YOUR_TOKEN" />'} />
       <H2>3. Add the script</H2>
-      <Code file="index.html" code={`<script defer\n  src="${HOST}/t/1.0.0/a.js"\n  integrity="${SRI}"\n  crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
+      <Code file="index.html" code={`<script defer\n  src="${HOST}${TRACKER.path}"\n  integrity="${SRI}"\n  crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
       <H2>4. Watch it arrive</H2>
-      <P>Open your dashboard. The live panel shows events within seconds. If nothing shows up, check that the page is served from the verified domain and that the request to <C>/e</C> returns 202.</P>
+      <P>Open <A to="/pilot">your private dashboard</A> and enter the project access code shared with your team. Visit your verified website; the live panel refreshes every five seconds. A 202 from the deployed collector means the write committed. A 400/403 indicates a payload or domain check failed; 503 means collection could not be stored. Contact us if events do not arrive.</P>
     </>,
   },
   {
@@ -50,17 +51,17 @@ export const PAGES: DocPage[] = [
     lead: 'One pinned, integrity checked script. No cookies, no local storage.',
     body: <>
       <H2>Install</H2>
-      <Code file="index.html" code={`<script defer src="${HOST}/t/1.0.0/a.js"\n  integrity="${SRI}" crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
+      <Code file="index.html" code={`<script defer src="${HOST}${TRACKER.path}"\n  integrity="${SRI}" crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
       <H2>Pinned versions</H2>
       <P>Tracker builds live at <C>/t/&lt;version&gt;/a.js</C> and never change once published. The build script refuses to overwrite a published version, the integrity hash is committed next to each build, and files are served with an immutable cache header. Upgrading means changing the version in your tag on purpose.</P>
       <H2>Options</H2>
       <Table head={['Attribute', 'Meaning']} rows={[
         ['data-site', 'Required. Your public site id.'],
         ['data-endpoint', 'Optional. Collector URL, defaults to /e on the script host. Point it at a first party proxy to avoid blockers.'],
-        ['data-dnt', 'Optional. "true" honours Do Not Track and Global Privacy Control.'],
+        ['data-dnt', 'Version 1.0.1 respects Do Not Track and Global Privacy Control by default. Set "false" only after reviewing your tracking policy.'],
       ]} />
       <H2>First party proxy</H2>
-      <P>Content blockers may drop third party analytics. Proxying through your own domain keeps the data and costs nothing in privacy, because Stellarcope stores nothing personal.</P>
+      <P>Content blockers may drop third party analytics. Proxying through your own domain can improve delivery, but needs correct forwarding of visitor information and its own privacy review.</P>
       <Code file="next.config.js" code={`module.exports = {\n  async rewrites() {\n    return [\n      { source: '/a/t/:path*', destination: '${HOST}/t/:path*' },\n      { source: '/a/e', destination: '${HOST}/e' },\n    ]\n  },\n}`} />
     </>,
   },
@@ -190,16 +191,17 @@ export const PAGES: DocPage[] = [
   },
   {
     slug: 'data-collected', group: 'Privacy', title: 'Data collected',
-    lead: 'Nothing personal, so no consent banner is needed.',
+    lead: 'A small collection profile for public websites.',
     body: <>
       <Table head={['Kept', 'Never kept']} rows={[
-        ['Page path, query parameters only from an allowlist', 'IP addresses'],
-        ['Referring domain', 'Cookies, local storage, fingerprints'],
+        ['Normalized page path; queries and fragments removed', 'IP addresses'],
+        ['Referring domain', 'Visitor cookies or local storage'],
         ['Country, derived in memory from the edge', 'Wallet addresses, hashes, amounts'],
         ['Browser, OS and device family', 'Emails, names, user ids'],
         ['Daily visitor hash with a rotating salt', 'Request bodies, headers, query values'],
-        ['Custom event names and flat properties', 'Raw traces, spans, logs'],
+        ['Bounded custom event names and properties', 'Raw traces, spans, logs'],
       ]} />
+      <P>Use the pilot on public marketing and documentation pages. Do not instrument account pages or send personal data in paths, event names or campaign labels. Sanitation reduces accidental exposure; it is not a guarantee of anonymity or a jurisdiction-wide consent exemption. Private dashboard access uses a separate HttpOnly cookie.</P>
       <H2>The visitor hash</H2>
       <P>A visitor id is <C>sha256(daily salt, site, IP, user agent)</C>. The salt is random, shared by all collectors through the database, and deleted when the day ends. Visits on different days cannot be linked, and the IP never leaves memory.</P>
     </>,
@@ -210,7 +212,7 @@ export const PAGES: DocPage[] = [
     body: <>
       <Note kind="status">During the build phase data is stored in a managed Postgres in the United States. Production hosting moves to the EU before launch, as stated in the RFP response.</Note>
       <H2>Erasure</H2>
-      <P>A tenant can delete all of its data. Events, drops, API minutes and the tenant record are removed; seal leaves keep only hashes, which contain no personal data.</P>
+      <P>Pilot offboarding is assisted: contact us to stop collection, revoke access, export reports or request deletion. Retention and deletion are operator procedures during the pilot; automated tenant-triggered erasure is planned. Previously anchored aggregate commitments cannot be removed from Stellar. See the repository pilot guide for the backup and deletion boundaries.</P>
     </>,
   },
   {
@@ -223,7 +225,7 @@ export const PAGES: DocPage[] = [
         ['GET /api/projects?days=', 'Every public tenant with totals, trend and trust, for the operator view.'],
         ['GET /api/seals?tenant=', 'The last 14 seals with roots and transaction hashes.'],
         ['GET /api/proof?tenant=&day=', 'Summary, leaf, Merkle path, root and the ledger key for one day.'],
-        ['POST /e', 'Web ingestion. Always answers 202.'],
+        ['POST /e', 'Web ingestion. 202 after storage; 400/403 for rejected input; 429 for rate limiting; 503 when storage fails.'],
       ]} />
       <Code file="terminal" code={`curl "${HOST}/api/stats?tenant=stellarcope&days=7"`} />
     </>,
@@ -236,7 +238,7 @@ export const PAGES: DocPage[] = [
         ['Shared logic', 'packages/core: normalization, filters, sessions, Merkle, histograms'],
         ['Tracker', 'packages/tracker'],
         ['Wallets Kit wrapper', 'packages/swk'],
-        ['Collector with durable spool', 'services/collector'],
+        ['Standalone collector with a best-effort spool', 'services/collector'],
         ['Spool to Postgres writer', 'services/writer'],
         ['Read API and seals', 'services/api, api/'],
         ['Schema', 'db/schema.sql'],

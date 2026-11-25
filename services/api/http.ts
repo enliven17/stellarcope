@@ -54,11 +54,11 @@ export function measured(handler: Handler): Handler {
     try {
       await handler(req, res)
     } catch (err) {
-      console.error('handler failed', err)
+      console.error('handler failed')
       if (!res.headersSent) json(res, 500, { error: 'internal error' })
     }
     const route = `${req.method} ${normalizePath(new URL(req.url ?? '/', 'http://api').pathname).route}`
-    const done = record(route, res.statusCode, performance.now() - start).catch((err) => console.error('metric write failed', err))
+    const done = record(route, res.statusCode, performance.now() - start).catch(() => console.error('metric write failed'))
     try {
       const { waitUntil } = await import('@vercel/functions')
       waitUntil(done)

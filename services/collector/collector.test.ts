@@ -50,7 +50,7 @@ test('collector to spool to postgres, with filtering counted', async () => {
       post(view({ site: 'unknown' })),
       post('garbage'),
     ]).then((rs) => rs.map((r) => r.status))
-    assert.ok(codes.every((c) => c === 202), 'always 202')
+    assert.deepEqual(codes, [202, 202, 202, 403, 403, 403, 400, 400])
     assert.deepEqual({ ...stats }, { accepted: 3, dropped: 3, invalid: 2 })
 
     const js = await fetch(`${base}/t/1.0.0/a.js`)
@@ -79,4 +79,85 @@ test('collector to spool to postgres, with filtering counted', async () => {
   const drops = await sql.query<{ reason: string; count: number }>('select reason, count::int as count from drops order by reason')
   assert.deepEqual(drops.rows, [{ reason: 'bot', count: 1 }, { reason: 'headless', count: 1 }, { reason: 'origin', count: 1 }])
   await db.close()
+})
+
+test('collection waits for storage and returns a retryable error on storage failure', async () => {
+  let enter!: () => void
+  let commit!: () => void
+  const entered = new Promise<void>((resolve) => { enter = resolve })
+  const committed = new Promise<void>((resolve) => { commit = resolve })
+  let finished = false
+  let fail = false
+  const { handle, stats } = collector({ sites: staticSites({ hx_7f3a: { tenantId: 'halcyon', domains: ['halcyon.exchange'] } }), spool: { push: async () => { enter(); if (fail) throw new Error('secret payload must not be reflected'); await committed } } })
+  const server = createServer((req, res) => { res.on('finish', () => { finished = true }); void handle(req, res) })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const post = () => fetch(`${base}/e`, { method: 'POST', body: view(), headers: { 'user-agent': UA, origin: 'https://halcyon.exchange' } })
+  try {
+    const response = post()
+    await entered
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    assert.equal(finished, false, '202 must wait for storage')
+    assert.equal(stats.accepted, 0)
+    commit()
+    assert.equal((await response).status, 202)
+    assert.equal(stats.accepted, 1)
+    fail = true
+    const failure = await post()
+    assert.equal(failure.status, 503)
+    assert.equal(failure.headers.get('retry-after'), '60')
+    assert.doesNotMatch(await failure.text(), /secret|payload/)
+    assert.equal(stats.accepted, 1, 'failed storage is not counted as accepted')
+    const huge = await fetch(`${base}/e`, { method: 'POST', body: 'é'.repeat(5000) })
+    assert.equal(huge.status, 413)
+  } finally { commit(); await new Promise<void>((resolve) => server.close(() => resolve())) }
+})
+
+test('web paths and campaign fields discard queries, credentials and personal-looking values', () => {
+  const p = parsePayload(view({ path: '/account/GBX7HQ6KH7UQ3RPZT2Y4Q5C4WJ6LVQZPJ2Q4QG4D2NWZK3F5Y3EQQ4ZD/person%40example.test?token=secret#fragment', utm: { source: 'person@example.test', medium: 'social', campaign: 'release-v1' } }))!
+  assert.equal(p.path, '/account/:account/:redacted')
+  assert.deepEqual(p.utm, { medium: 'social', campaign: 'release-v1' })
+  assert.equal(parsePayload(view({ path: '//evil.test/x' })), null)
+  assert.equal(parsePayload(view({ path: '/x/%0aheader' })), null)
+  assert.equal(parsePayload(view({ tenantId: 'forged' })), null)
+  assert.deepEqual(scrubProps({ email: 'person@example.test', 'person@example.test': 'bad', ratio: Infinity }), { email: '[masked]' })
+})
+
+test('encoded delimiters and credential-shaped metadata never enter collection records', () => {
+  for (const path of ['/x%2f550e8400-e29b-41d4-a716-446655440000','/x%3ftoken=hidden','/person%2540example.test','/x%23hidden']) assert.equal(parsePayload(view({ path })), null, path)
+  const code = `scp_${'a'.repeat(43)}`
+  const p = parsePayload(view({ name: 'person@example.test', props: { token: code }, utm: { source: code } }))!
+  assert.equal(p.name, undefined, 'pageviews discard unused event metadata')
+  assert.equal(p.props, undefined)
+  assert.deepEqual(p.utm, {})
+  assert.equal(parsePayload(view({ type: 'event', name: 'person@example.test' })), null)
+  assert.equal(parsePayload(view({ type: 'event', name: code })), null)
+  assert.deepEqual(scrubProps({ token: code, phone: 905551234567, network: 'testnet' }), { token: '[masked]', phone: '[masked]', network: 'testnet' })
+})
+
+test('concurrent collection responses follow their own commits without mixing records', async () => {
+  const release: Record<string, () => void> = {}
+  const entered: Record<string, () => void> = {}
+  const ready = Object.fromEntries(['/a','/b'].map((path) => [path, new Promise<void>((resolve) => { entered[path] = resolve })]))
+  const commits: string[] = []
+  const { handle } = collector({ sites: staticSites({ hx_7f3a: { tenantId: 'halcyon', domains: ['halcyon.exchange'] } }), spool: { push: async (record) => {
+    if (record.kind !== 'event') throw new Error('unexpected record')
+    const path = (record.data as { path: string }).path
+    await new Promise<void>((resolve) => { release[path] = resolve; entered[path]() })
+    commits.push(path)
+  } } })
+  const server = createServer((req,res) => { void handle(req,res) })
+  await new Promise<void>((resolve) => server.listen(0,'127.0.0.1',resolve))
+  const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const post=(path:string)=>fetch(`${base}/e`,{method:'POST',body:view({path}),headers:{'user-agent':UA,origin:'https://halcyon.exchange'}})
+  try {
+    const a=post('/a'); const b=post('/b')
+    await Promise.all(Object.values(ready))
+    release['/b']()
+    assert.equal((await b).status,202)
+    assert.deepEqual(commits,['/b'])
+    release['/a']()
+    assert.equal((await a).status,202)
+    assert.deepEqual(commits,['/b','/a'])
+  } finally { Object.values(release).forEach((done)=>done()); await new Promise<void>((resolve)=>server.close(()=>resolve())) }
 })

@@ -13,7 +13,7 @@ const pixels = (color: string) => ({
 
 /** ranked rows with a dithered bar that springs to its width */
 export function RankList({ rows, tone = 'gold', value, empty = 'Nothing recorded yet', limit = 6 }: {
-  rows: { label: string; value: number }[]; tone?: Tone; value?: (r: { label: string; value: number }, share: number) => string; empty?: string; limit?: number
+  rows: { label: string; value: number; share?: number }[]; tone?: Tone; value?: (r: { label: string; value: number }, share: number) => string; empty?: string; limit?: number
 }) {
   const top = Math.max(1, ...rows.map((r) => r.value))
   const total = rows.reduce((a, r) => a + r.value, 0) || 1
@@ -24,7 +24,7 @@ export function RankList({ rows, tone = 'gold', value, empty = 'Nothing recorded
         <li key={r.label} className="group">
           <div className="flex items-baseline justify-between gap-4 text-[13px]">
             <span className="truncate text-ink" title={r.label}>{r.label}</span>
-            <span className="shrink-0 font-mono text-[12px] text-mute">{value ? value(r, r.value / total) : `${r.value.toLocaleString('en-US')}  ${Math.round((r.value / total) * 100)}%`}</span>
+            <span className="shrink-0 font-mono text-[12px] text-mute">{value ? value(r, r.share ?? r.value / total) : `${r.value.toLocaleString('en-US')}  ${Math.round((r.share ?? r.value / total) * 100)}%`}</span>
           </div>
           <div className="mt-1.5 h-[10px] bg-[rgb(236_234_228/0.04)]">
             <motion.div className="h-full opacity-80 transition-opacity group-hover:opacity-100" style={pixels(toneHex(tone))}
@@ -66,7 +66,7 @@ const SPIN = ['|', '/', '-', '\\']
 
 /** live events; rows enter from the top with a spring */
 export function LiveStream({ tenant }: { tenant: string }) {
-  const { data } = useApi<Live>(`/api/live?tenant=${tenant}`, 5000)
+  const { data, error } = useApi<Live>(`/api/live?tenant=${encodeURIComponent(tenant)}`, 5000)
   const [frame, setFrame] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setFrame((f) => (f + 1) % SPIN.length), 1000)
@@ -76,9 +76,10 @@ export function LiveStream({ tenant }: { tenant: string }) {
     <div className="flex h-full flex-col">
       <div className="flex items-baseline gap-3">
         <span className="font-mono text-[12px] text-gold">[ {SPIN[frame]} ]</span>
-        <span className="num text-3xl text-ink">{data?.active ?? 0}</span>
-        <span className="text-[13px] text-mute">visitors right now</span>
+        <span className="num text-3xl text-ink">{data?.active ?? '—'}</span>
+        <span className="text-[13px] text-mute">visitors in the last 5 minutes</span>
       </div>
+      {error && <p role="status" className="mt-3 text-sm text-gold">Live updates unavailable. {data ? 'Showing the previous response.' : 'Please try again shortly.'}</p>}
       <ol className="mt-5 max-h-[300px] flex-1 overflow-y-auto font-mono text-[12px]" data-lenis-prevent>
         {data && !data.events.length && <li className="text-dim">Waiting for the first event.</li>}
         <AnimatePresence initial={false}>

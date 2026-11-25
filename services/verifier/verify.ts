@@ -6,10 +6,33 @@ import { resolveTxt } from 'node:dns/promises'
 const TIMEOUT = 5000
 
 async function fetchText(url: string) {
-  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT), headers: { 'user-agent': 'StellarcopeVerifier/1.0' } })
-  if (!res.ok) return null
-  const text = await res.text()
-  return text.slice(0, 200_000)
+  const original = new URL(url)
+  const canonical = (host: string) => host.replace(/^www\./, '')
+  let current = original
+  for (let redirects = 0; redirects <= 3; redirects++) {
+    if (current.protocol !== 'https:' || current.port || current.username || current.password || canonical(current.hostname) !== canonical(original.hostname)) return null
+    const res = await fetch(current.href, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT), headers: { 'user-agent': 'StellarcopeVerifier/1.0' } })
+    if ([301,302,303,307,308].includes(res.status)) {
+      const location = res.headers.get('location')
+      await res.body?.cancel()
+      if (!location) return null
+      current = new URL(location, current)
+      continue
+    }
+    if (!res.ok || !res.body) return null
+    const reader = res.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > 200_000) { await reader.cancel(); return null }
+      chunks.push(value)
+    }
+    return Buffer.concat(chunks).toString('utf8')
+  }
+  return null
 }
 
 /** SEP-1: the signing account must be listed in ACCOUNTS of the domain's stellar.toml */

@@ -9,7 +9,7 @@ export function dbSites(sql: Sql, ttlMs = 60_000): SiteRegistry {
   return {
     async lookup(siteId) {
       const hit = cache.get(siteId)
-      if (hit && Date.now() - hit.at < ttlMs) return hit.site
+      if (ttlMs > 0 && hit && Date.now() - hit.at < ttlMs) return hit.site
       const { rows } = await sql.query<{ tenant_id: string; domain: string | null }>(
         `select s.tenant_id, d.domain from sites s
            join tenants t on t.id = s.tenant_id and t.status = 'active'
@@ -19,7 +19,7 @@ export function dbSites(sql: Sql, ttlMs = 60_000): SiteRegistry {
       )
       const domains = rows.map((r) => r.domain).filter((d): d is string => !!d)
       const site = rows.length && domains.length ? { tenantId: rows[0].tenant_id, domains } : null
-      cache.set(siteId, { at: Date.now(), site })
+      if (ttlMs > 0) cache.set(siteId, { at: Date.now(), site })
       return site
     },
   }

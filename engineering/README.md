@@ -10,6 +10,7 @@ Stellarcope uses **Umami internally**, behind its own admission layer. Ingress i
 | [Architecture diagrams](diagrams/) | Fourteen diagram pages: system overview, web and access sequences, API and onchain flows, state machines, data models, infrastructure, failover, privacy and handover. They are shown as PNGs, with the editable [draw.io source](diagrams/stellarcope-architecture.drawio). |
 | [Roadmap](roadmap.md) | What exists today and what each milestone delivers |
 | [Technology decisions](decisions.md) | The selected stack, the evidence behind each choice, delivery semantics and coding practices |
+| [Early web pilot](pilot.md) | Assisted onboarding, private project access, the legacy web collector and local setup; production integrations remain deferred |
 | [Ingress service](ingress.md) | Running the ingress service: commands, routes, configuration, limits, logging and known limitations |
 | [Service images](../infra/images/README.md) | Reproducible image definitions and upstream coupling |
 | [Initial advisory review](security/initial-advisory-review/README.md) | Dependency and image findings at the recorded revision; the active definitions and lockfiles were patched afterwards |

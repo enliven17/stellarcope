@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - if: matrix.node == '26.13.1'
+        run: npm run smoke:pilot:postgres
+      - if: matrix.node == '26.13.1'
         run: |
           npm audit --audit-level=low
           npm audit --prefix experiments/stack --audit-level=low
