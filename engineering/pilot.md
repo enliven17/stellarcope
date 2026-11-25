@@ -79,7 +79,17 @@ If deletion is requested, the operator deletes the project's `events` and `drops
 
 ## Validation and limits
 
-`npm run check` runs contract, HTTP access, collector, tracker and onboarding tests, types, existing lint/format scopes and frontend build. HTTP fixtures use PGlite and local listeners; they do not prove PostgreSQL RLS, cloud recovery or production availability. New pilot code uses the existing pooled transaction helper; real PostgreSQL/staging checks remain necessary before inviting the first project.
+`npm run check` runs contract, HTTP access, collector, tracker and onboarding tests, types, existing lint/format scopes and frontend build. HTTP fixtures use PGlite and local listeners.
+
+With Docker running, execute the real PostgreSQL check before deployment:
+
+```sh
+npm run smoke:pilot:postgres
+```
+
+This pulls the official PostgreSQL 17.12 Alpine image if needed and creates its own disposable database on a loopback port. It overrides `DATABASE_URL` for every child process and never targets an existing database. It runs the actual operator CLI and pilot HTTP backend with a non-owner, non-superuser application role, then removes its container and processes. It checks concurrent collection, commit-before-202, failed-write rollback, database pause and restart recovery, private report access, credential rotation/revocation, suspension, JSON export and database-backed Merkle proofs. Idle database disconnections emit a generic log message; the process stays alive and subsequent requests reconnect. Requests during an outage can receive 503; writes are not automatically retried.
+
+CI runs this smoke check on Node 26.13.1. These checks do not establish PostgreSQL RLS, cloud failover or production availability. The smoke test injects a successful domain-proof check for synthetic domains and submits no Stellar transactions. Verify real domain ownership and the deployed tracker-to-dashboard flow on staging before inviting the first project.
 
 The standalone `services/collector/main.ts` still uses its prototype local spool. The Vercel `/e` and local pilot backend use the synchronous database sink. Success after commit does not prevent duplicates when an acknowledgment is lost; there is no client retry identity in this pilot. Future production collection adds that contract and the managed queues.
 

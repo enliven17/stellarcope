@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-11-25T13:25:13.674Z",
+  "node": "v24.22.3",
+  "postgres": "17.12",
+  "image": "postgres:17.12-alpine",
+  "imageId": "sha256:952102c847d67f9a4237d6398f04f5bcfcdfb2c33cbdc3fbc3175fba22bd2bda",
+  "repoDigests": [
+    "postgres@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73"
+  ],
+  "architecture": "arm64",
+  "checks": 15,
+  "results": [
+    "schema initialization and repeat initialization",
+    "application role has DML access without table ownership or superuser",
+    "real CLI enrollment is private and rejects duplicate projects atomically",
+    "unverified sites reject collection and verified sites persist before 202",
+    "concurrent pooled collection preserves exact accepted counts and tenant attribution",
+    "cookie login and every private report deny cross-project access",
+    "a database lock prevents premature success acknowledgment",
+    "failed writes roll back and the pool serves later requests",
+    "daily Merkle summaries and protected inclusion proofs use real PostgreSQL rows",
+    "documented npm export produces parseable JSON without credentials",
+    "concurrent access rotation leaves one usable credential",
+    "a blocked write times out without committing after its rejection",
+    "database unavailability rejects admission and recovers",
+    "pilot survives database restart and keeps committed data",
+    "revocation and suspension immediately disable access and admission"
+  ],
+  "restartRecovery": {
+    "milliseconds": 24,
+    "responses": [200]
+  },
+  "externalTransactions": 0
+}

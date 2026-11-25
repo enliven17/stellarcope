@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "brand": "node scripts/brand.mjs",
     "test": "node --test \"packages/**/*.test.ts\" \"services/**/*.test.ts\"",
+    "smoke:pilot:postgres": "node scripts/pilot-postgres-smoke.mjs",
     "typecheck": "tsc -b && tsc -p tsconfig.node.json && tsc -p api/tsconfig.json --noEmit && tsc -p packages/ingestion/tsconfig.json && tsc -p services/ingress/tsconfig.json",
     "seed": "node --env-file=.env.local scripts/seed.ts",
     "pilot": "node --env-file-if-exists=.env.local scripts/pilot.ts",

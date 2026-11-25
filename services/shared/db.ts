@@ -13,7 +13,12 @@ export async function connect(url = process.env.DATABASE_URL): Promise<Sql> {
   if (!url) throw new Error('DATABASE_URL is not set')
   const { default: pg } = await import('pg')
   pg.types.setTypeParser(1082, (v: string) => v) // keep date columns as YYYY-MM-DD, no timezone shift
-  return new pg.Pool({ connectionString: url, max: 10, connectionTimeoutMillis: 5000, query_timeout: 5000 })
+  const pool = new pg.Pool({ connectionString: url, max: 10, connectionTimeoutMillis: 5000, query_timeout: 5000 })
+  // pg removes the disconnected idle client itself. Handle its pool-level error so
+  // a database restart does not crash the process; the next query opens a new client.
+  // Never serialize the error/client: it can contain connection credentials.
+  pool.on('error', () => console.error('database idle connection failed'))
+  return pool
 }
 
 /** runs fn inside one transaction on one connection (a pool would spread statements across clients) */
