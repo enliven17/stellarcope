@@ -6,7 +6,8 @@ import { DailySalt, visitorId } from '../../packages/core/session.ts'
 import type { Spool } from '../shared/spool.ts'
 import type { SiteRegistry } from '../shared/sites.ts'
 import { parseUa } from './ua.ts'
-import { campaign, PERSONAL, webPath } from '../../packages/core/privacy.ts'
+import { campaign, eventName, scrubProps, webPath } from '../../packages/core/privacy.ts'
+export { scrubProps } from '../../packages/core/privacy.ts'
 
 // Await the configured sink before acknowledging. The deployed sink commits to PostgreSQL;
 // the standalone spool remains a best-effort prototype buffer.
@@ -33,7 +34,6 @@ type Incoming = {
 }
 
 const str = (v: unknown, max: number) => (typeof v === 'string' && v.length <= max ? v : undefined)
-const campaignEvent = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(value) && !PERSONAL.some((pattern) => pattern.test(value))
 
 /** strict shape check at the trust boundary; anything unexpected is rejected */
 export function parsePayload(raw: string): Incoming | null {
@@ -47,7 +47,7 @@ export function parsePayload(raw: string): Incoming | null {
   const hostname = str(j.hostname, 253)
   const type = j.type === 'pageview' || j.type === 'event' ? j.type : null
   if (!site || !path || !hostname || !type || !path.startsWith('/')) return null
-  if (type === 'event' && !campaignEvent(j.name)) return null
+  if (type === 'event' && !eventName(j.name)) return null
   const screen = j.screen as { w?: unknown; h?: unknown } | undefined
   return {
     site, type, path, hostname,
@@ -59,19 +59,6 @@ export function parsePayload(raw: string): Incoming | null {
     lang: str(j.lang, 35),
     webdriver: j.webdriver === true,
   }
-}
-
-/** custom event props: flat, small, and with personal looking values masked */
-export function scrubProps(props: unknown): Record<string, string | number | boolean> | undefined {
-  if (!props || typeof props !== 'object' || Array.isArray(props)) return undefined
-  const out: Record<string, string | number | boolean> = {}
-  for (const [k, v] of Object.entries(props).slice(0, 20)) {
-    if (!/^[A-Za-z][A-Za-z0-9_.:-]{0,39}$/.test(k)) continue
-    if (typeof v === 'number' && Number.isFinite(v)) out[k] = PERSONAL.some((pattern) => pattern.test(String(v))) ? '[masked]' : v
-    else if (typeof v === 'boolean') out[k] = v
-    else if (typeof v === 'string') out[k] = PERSONAL.some((re) => re.test(v)) ? '[masked]' : v.slice(0, 200)
-  }
-  return Object.keys(out).length ? out : undefined
 }
 
 function clientIp(req: IncomingMessage) {

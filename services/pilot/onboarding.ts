@@ -28,7 +28,7 @@ async function insertCode(sql: Sql, id: string) {
 export function trackerSnippet(site: string, origin: string) {
   pilotOrigin(origin)
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(site)) throw new Error('Invalid snippet configuration')
-  return `<script defer src="${origin}${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" data-site="${site}"></script>`
+  return `<script async src="${origin}${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer" data-site="${site}"></script>`
 }
 
 export async function enrollPilot(

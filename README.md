@@ -49,11 +49,13 @@ npm run pilot -- enroll --id example-project --name 'Example project' --domain e
 npm run pilot -- verify --id example-project
 ```
 
-The CLI requires a configured database. It prints the completed snippet and private project access code to the invoking operator only. The tracker version is **1.0.1**, with integrity:
+The CLI requires a configured database. It prints the completed snippet and private project access code to the invoking operator only. The tracker version is **1.0.2**, with integrity:
 
 ```text
-sha384-jdJz1Fea69ia3b6WtkhrLxQ/lvDwtUQByhgTkrE53kNV3hNydNZX4ZHDfLqW03oB
+sha384-a6E1KvHs5MF5YtTvvw+LHKka9TZy97t254dpEKf1pC9dsOJwgUPHOlyD8Bfgndlv
 ```
+
+New snippets load asynchronously, sanitize supported analytics fields before transmission and omit HTTP referrer headers. Use `data-exclude-paths="/account,/checkout"` for site-specific private routes. Replace an older script tag rather than adding a second version. See the pilot operator guide for the exclusion and upgrade boundaries.
 
 ## Implementation status
 

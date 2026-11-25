@@ -16,7 +16,7 @@ export const PAGES: DocPage[] = [
       <P>Stellar Community Fund reviewers rely on self reported usage. A screenshot of a dashboard proves very little. Stellarcope is a shared analytics service run for the ecosystem, so every project is measured the same way and every number can be checked.</P>
       <H2>Two layers, one platform</H2>
       <List items={[
-        <><b className="text-gold">Web analytics</b>: page views, visitors, referrers, countries, devices, custom events and a Stellar Wallets Kit funnel, from a 1.5 KB script.</>,
+        <><b className="text-gold">Web analytics</b>: page views, visitors, referrers, countries, devices, custom events and a Stellar Wallets Kit funnel, from a small, version pinned script.</>,
         <><b className="text-blue">API analytics</b>: request volume, status codes and latency percentiles per normalized route, from OpenTelemetry or from a direct integration.</>,
       ]} />
       <H2>What makes the numbers trustworthy</H2>
@@ -41,7 +41,7 @@ export const PAGES: DocPage[] = [
       <P>Add the meta tag you receive to the head of your site, or one of the other methods in <A to="/docs/domain-verification">domain verification</A>. Events from unverified origins are refused.</P>
       <Code file="index.html" code={'<meta name="stellarcope-verify" content="YOUR_TOKEN" />'} />
       <H2>3. Add the script</H2>
-      <Code file="index.html" code={`<script defer\n  src="${HOST}${TRACKER.path}"\n  integrity="${SRI}"\n  crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
+      <Code file="index.html" code={`<script async\n  src="${HOST}${TRACKER.path}"\n  integrity="${SRI}"\n  crossorigin="anonymous" referrerpolicy="no-referrer"\n  data-site="YOUR_SITE_ID"></script>`} />
       <H2>4. Watch it arrive</H2>
       <P>Open <A to="/pilot">your private dashboard</A> and enter the project access code shared with your team. Visit your verified website; the live panel refreshes every five seconds. A 202 from the deployed collector means the write committed. A 400/403 indicates a payload or domain check failed; 503 means collection could not be stored. Contact us if events do not arrive.</P>
     </>,
@@ -51,15 +51,19 @@ export const PAGES: DocPage[] = [
     lead: 'One pinned, integrity checked script. No cookies, no local storage.',
     body: <>
       <H2>Install</H2>
-      <Code file="index.html" code={`<script defer src="${HOST}${TRACKER.path}"\n  integrity="${SRI}" crossorigin="anonymous"\n  data-site="YOUR_SITE_ID"></script>`} />
+      <Code file="index.html" code={`<script async src="${HOST}${TRACKER.path}"\n  integrity="${SRI}" crossorigin="anonymous" referrerpolicy="no-referrer"\n  data-site="YOUR_SITE_ID"></script>`} />
       <H2>Pinned versions</H2>
       <P>Tracker builds live at <C>/t/&lt;version&gt;/a.js</C> and never change once published. The build script refuses to overwrite a published version, the integrity hash is committed next to each build, and files are served with an immutable cache header. Upgrading means changing the version in your tag on purpose.</P>
       <H2>Options</H2>
       <Table head={['Attribute', 'Meaning']} rows={[
         ['data-site', 'Required. Your public site id.'],
         ['data-endpoint', 'Optional. Collector URL, defaults to /e on the script host. Point it at a first party proxy to avoid blockers.'],
-        ['data-dnt', 'Version 1.0.1 respects Do Not Track and Global Privacy Control by default. Set "false" only after reviewing your tracking policy.'],
+        ['data-dnt', 'Do Not Track and Global Privacy Control are respected by default. Set "false" only after reviewing your tracking policy.'],
+        ['data-exclude-paths', 'Optional comma-separated literal path prefixes, such as /account,/checkout. These routes and their children send neither pageviews nor custom events. Invalid prefixes disable collection.'],
       ]} />
+      <H2>Protect the host application</H2>
+      <P>Use the async snippet with its integrity hash and referrerpolicy. Version 1.0.2 sanitizes paths, campaign values and supported custom properties before sending, and omits the HTTP referrer header. Exclusions apply before normalization. Install one version per page; duplicate 1.0.2 snippets share one initialization, but older versions cannot participate in that guard.</P>
+      <P>Instrument public pages only. Pattern matching cannot identify every kind of personal data. Exclude private routes explicitly and never send names, secrets or account information as custom properties. Custom event calls should use optional chaining because an async script may not have loaded yet.</P>
       <H2>First party proxy</H2>
       <P>Content blockers may drop third party analytics. Proxying through your own domain can improve delivery, but needs correct forwarding of visitor information and its own privacy review.</P>
       <Code file="next.config.js" code={`module.exports = {\n  async rewrites() {\n    return [\n      { source: '/a/t/:path*', destination: '${HOST}/t/:path*' },\n      { source: '/a/e', destination: '${HOST}/e' },\n    ]\n  },\n}`} />
@@ -80,7 +84,7 @@ export const PAGES: DocPage[] = [
     slug: 'custom-events', group: 'Web analytics', title: 'Custom events',
     lead: 'Name what matters and attach a few flat properties.',
     body: <>
-      <Code file="anywhere.js" code={`window.stellarcope.track('quote_requested', { pair: 'XLM/USDC', amount_band: '100-1000' })`} />
+      <Code file="anywhere.js" code={`window.stellarcope?.track('quote_requested', { pair: 'XLM/USDC', amount_band: '100-1000' })`} />
       <H2>Rules</H2>
       <List items={[
         'Event names up to 64 characters.',

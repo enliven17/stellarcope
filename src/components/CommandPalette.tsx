@@ -10,7 +10,7 @@ type Command = { id: string; label: string; hint: string; run: () => void }
 /** page level commands are announced with this event, e.g. switching a dashboard tab */
 export const emit = (action: string, value?: string) => window.dispatchEvent(new CustomEvent('stellarcope:cmd', { detail: { action, value } }))
 
-const SNIPPET = `<script defer src="https://stellarcope.xyz${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" data-site="YOUR_SITE_ID"></script>`
+const SNIPPET = `<script async src="https://stellarcope.xyz${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer" data-site="YOUR_SITE_ID"></script>`
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)

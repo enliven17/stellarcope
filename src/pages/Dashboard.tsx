@@ -82,7 +82,7 @@ function WebView({ s, tenant, pilot = false }: { s: Stats; tenant: string; pilot
         <div className="mt-6"><RankList rows={w.referrers} tone="ink" limit={8} /></div>
       </Card>
       {!pilot && <Card className="p-6 lg:col-span-12">
-        <CardHead title="Custom events" meta={<span className="font-mono text-[11px] text-dim">window.stellarcope.track(name, props)</span>} />
+        <CardHead title="Custom events" meta={<span className="font-mono text-[11px] text-dim">window.stellarcope?.track(name, props)</span>} />
         <div className="mt-6"><RankList rows={w.events} tone="blue" empty="No custom events tracked yet" /></div>
       </Card>}
     </div>
@@ -249,7 +249,7 @@ export default function Dashboard({ pilotTenant, onSignOut }: { pilotTenant?: st
 
         {pilot && data && <div className="hair mt-8 border-y py-5">
           <p className="text-sm">{!data.trust.checks.origin ? 'Waiting for domain verification. Contact us to finish setup.' : data.collection?.lastEventAt ? `Last pageview received ${new Date(data.collection.lastEventAt).toLocaleString()}.` : 'Domain verified. Install the snippet, visit your site, then check the live panel below.'}</p>
-          <details className="mt-3"><summary className="cursor-pointer font-mono text-[12px] text-mute">Installation snippet</summary><pre className="hair mt-3 overflow-x-auto border bg-panel p-4 font-mono text-[11px] text-mute">{data.sites?.[0] ? `<script defer src="${window.location.origin}${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" data-site="${data.sites[0]}"></script>` : 'Contact us to register your website.'}</pre></details>
+          <details className="mt-3"><summary className="cursor-pointer font-mono text-[12px] text-mute">Installation snippet</summary><pre className="hair mt-3 overflow-x-auto border bg-panel p-4 font-mono text-[11px] text-mute">{data.sites?.[0] ? `<script async src="${window.location.origin}${TRACKER.path}" integrity="${TRACKER.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer" data-site="${data.sites[0]}"></script>` : 'Contact us to register your website.'}</pre></details>
           <p className="mt-3 font-mono text-[11px] text-dim">{updatedAt ? `Dashboard updated ${new Date(updatedAt).toLocaleTimeString()}. ` : ''}Automatic refresh every 30 seconds. Collection status is based on stored pageviews.</p>
         </div>}
         <div className="mt-6">
