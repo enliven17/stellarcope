@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { TRACKER } from '../../packages/tracker/release'
 import { A, C, Code, H2, List, Note, P, Table } from './kit'
+import DataProcessing from './data-processing'
 
 export type DocPage = { slug: string; group: string; title: string; lead: string; body: ReactNode }
 
@@ -41,6 +42,7 @@ export const PAGES: DocPage[] = [
       <P>Add the meta tag you receive to the head of your site, or one of the other methods in <A to="/docs/domain-verification">domain verification</A>. Events from unverified origins are refused.</P>
       <Code file="index.html" code={'<meta name="stellarcope-verify" content="YOUR_TOKEN" />'} />
       <H2>3. Add the script</H2>
+      <P>Before collection starts, read the <A to="/docs/data-processing">data processing information</A>, publish your project&apos;s privacy notice and establish the applicable legal basis. If consent is required, wait for consent before loading the tracker. The current pilot differs from the planned production service.</P>
       <Code file="index.html" code={`<script async\n  src="${HOST}${TRACKER.path}"\n  integrity="${SRI}"\n  crossorigin="anonymous" referrerpolicy="no-referrer"\n  data-site="YOUR_SITE_ID"></script>`} />
       <H2>4. Watch it arrive</H2>
       <P>Open <A to="/pilot">your private dashboard</A> and enter the project access code shared with your team. Visit your verified website; the live panel refreshes every five seconds. A 202 from the deployed collector means the write committed. A 400/403 indicates a payload or domain check failed; 503 means collection could not be stored. Contact us if events do not arrive.</P>
@@ -197,17 +199,20 @@ export const PAGES: DocPage[] = [
     slug: 'data-collected', group: 'Privacy', title: 'Data collected',
     lead: 'A small collection profile for public websites.',
     body: <>
-      <Table head={['Kept', 'Never kept']} rows={[
-        ['Normalized page path; queries and fragments removed', 'IP addresses'],
-        ['Referring domain', 'Visitor cookies or local storage'],
-        ['Country, derived in memory from the edge', 'Wallet addresses, hashes, amounts'],
-        ['Browser, OS and device family', 'Emails, names, user ids'],
-        ['Daily visitor hash with a rotating salt', 'Request bodies, headers, query values'],
-        ['Bounded custom event names and properties', 'Raw traces, spans, logs'],
+      <P>This page describes the current web pilot. See <A to="/docs/data-processing">data processing information</A> for the planned production service, GDPR considerations, locations, retention and rights.</P>
+      <Table head={['Information', 'Pilot handling']} rows={[
+        ['Normalized page path and timestamp', 'Stored for pageviews and events; query strings and fragments removed.'],
+        ['Referring domain and selected campaign labels', 'Stored after validation; do not put personal data in campaigns.'],
+        ['Country', 'Supplied by the hosting edge; the provider processes the request IP.'],
+        ['Browser, OS and device family', 'Derived from the User-Agent and stored as categories.'],
+        ['Daily visitor hash', 'Stored; derived from site, IP and User-Agent using a daily salt.'],
+        ['Custom event names and properties', 'Stored after bounded, pattern-based sanitation; arbitrary personal values may still pass.'],
+        ['IP and raw User-Agent', 'Processed at collection but not stored as fields in analytics event records. Provider request and security logs are separate.'],
+        ['Screen dimensions, language and automation signals', 'Sent by the tracker; screen and automation signals support filtering. These are not fields in the pilot event table.'],
       ]} />
       <P>Use the pilot on public marketing and documentation pages. Do not instrument account pages or send personal data in paths, event names or campaign labels. Sanitation reduces accidental exposure; it is not a guarantee of anonymity or a jurisdiction-wide consent exemption. Private dashboard access uses a separate HttpOnly cookie.</P>
       <H2>The visitor hash</H2>
-      <P>A visitor id is <C>sha256(daily salt, site, IP, user agent)</C>. The salt is random, shared by all collectors through the database, and deleted when the day ends. Visits on different days cannot be linked, and the IP never leaves memory.</P>
+      <P>A visitor id is <C>sha256(daily salt, site, IP, user agent)</C>. The random salt is shared through the database and changes each UTC day. Old database salts are deleted when a collector first obtains a later day&apos;s salt, not by an exact-midnight deletion job. Provider backups may retain older values until expiry. Site scoping and rotation reduce linkability; they do not guarantee anonymity.</P>
     </>,
   },
   {
@@ -217,7 +222,13 @@ export const PAGES: DocPage[] = [
       <Note kind="status">During the build phase data is stored in a managed Postgres in the United States. Production hosting moves to the EU before launch, as stated in the RFP response.</Note>
       <H2>Erasure</H2>
       <P>Pilot offboarding is assisted: contact us to stop collection, revoke access, export reports or request deletion. Retention and deletion are operator procedures during the pilot; automated tenant-triggered erasure is planned. Previously anchored aggregate commitments cannot be removed from Stellar. See the repository pilot guide for the backup and deletion boundaries.</P>
+      <P>The <A to="/docs/data-processing">data processing information</A> explains the EU production target, manual pilot retention, backup limitations and applicable rights. The planned production backup expiry of 35 days is not a verified pilot setting.</P>
     </>,
+  },
+  {
+    slug: 'data-processing', group: 'Privacy', title: 'Data processing information',
+    lead: 'Planned production processing, EU residency, retention and GDPR responsibilities, with current pilot differences.',
+    body: <DataProcessing />,
   },
   {
     slug: 'rest-api', group: 'Reference', title: 'REST API',

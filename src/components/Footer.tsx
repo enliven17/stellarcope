@@ -16,6 +16,7 @@ const COLUMNS = [
   ] },
   { title: 'Project', links: [
     { label: 'Docs', to: '/docs' },
+    { label: 'Data processing', to: '/docs/data-processing' },
     { label: 'Source code', href: REPO },
     { label: 'Brand kit', href: `${REPO}/tree/main/brand` },
   ] },
@@ -83,7 +84,7 @@ export default function Footer() {
 
       <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-4 px-4 py-8 font-mono text-[11px] text-dim sm:flex-row sm:items-center sm:px-8">
         <span>© {new Date().getFullYear()} Stellarcope contributors. MIT licensed.</span>
-        <span>No cookies. No personal data. Built for the Stellar Community Fund.</span>
+        <span>Cookieless analytics. Built for the Stellar ecosystem.</span>
         <button type="button" onClick={top} className="text-mute transition-colors hover:text-ink">Back to top ↑</button>
       </div>
     </footer>
