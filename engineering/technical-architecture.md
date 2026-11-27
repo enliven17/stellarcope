@@ -186,7 +186,9 @@ Tombstones take precedence over queue replay and are reapplied after any databas
 
 ## 6. Privacy and GDPR
 
-| Stored | Never stored |
+This section describes production design requirements, not the current pilot or a finding of legal compliance. The [privacy and GDPR review](privacy-and-gdpr.md) records the legal assumptions and launch requirements; the product [data processing page](../src/docs/data-processing.tsx) distinguishes the planned service from the US-hosted pilot. Privacy captions in the architecture diagrams are simplified design targets and must be read with these qualifications.
+
+| Planned analytics records | Excluded from analytics records |
 |---|---|
 | Page path without query string, referrer, country, browser, OS, device type, language | IP addresses, full user agents |
 | Session and visit IDs (salted hashes, salt rotates daily) | Cookies or any identifier stored on the visitor's device |
@@ -194,11 +196,12 @@ Tombstones take precedence over queue replay and are reapplied after any databas
 | API route, status code, latency histograms, service name | Traces, spans, logs, exemplars |
 | Daily onchain counts for registered accounts and contracts | Addresses of accounts interacting with a project |
 
-- **IP addresses** exist only in memory during admission. They are used for the session hash and, after truncation (last IPv4 octet, last 80 bits of IPv6), for country lookup. They are never persisted or logged.
-- **Visitors cannot be linked across days.** Session IDs come from Umami's resolver with `SALT_ROTATION=day` and a server secret. Once a day's salt is discarded, a returning visitor gets an unrelated ID.
-- **No device storage.** The tracker sets no cookies and uses no local storage, so no consent is needed for storage access.
-- **Data residency.** All processing and storage is in the EU: AWS Frankfurt (primary) and Ireland (standby). The backup copy outside AWS is held with an EU-located provider.
-- **Right to erasure.** The design keeps no data that identifies a visitor, so the people who can exercise erasure rights are limited to enrolled humans (their login identities) and tenants (their project data). Tenants can trigger complete erasure of a site or project from the dashboard. Backups expire within 35 days, and erasure tombstones are reapplied on any restore.
+- **IP addresses.** Admission uses IP and User-Agent transiently for identifier derivation and filtering. Before country lookup, the last IPv4 octet or last 80 IPv6 bits are removed. Raw IP/UA must not enter analytics tables, queue payloads or application access logs. Infrastructure security logs and provider access are separate processing that must be reviewed and disclosed; the current pilot uses edge-provided country information instead.
+- **Daily identifiers.** The intended Umami resolver uses daily salts and site-scoped identifiers to reduce linkability. Salt removal, replicas, caches and backups need operational verification. Hashes, event records and small-count aggregates are not automatically anonymous; do not promise that reidentification or cross-day inference is impossible.
+- **No tracker device storage.** The web tracker uses no cookies or local storage. This does not establish an ePrivacy consent exemption. Assess browser-information access, purposes and national requirements; gate collection on consent where required. Separate necessary dashboard authentication cookies must be disclosed.
+- **Data residency.** The target analytics infrastructure is in the EU: AWS Frankfurt (primary), Ireland (standby) and an EU-located external backup provider. Publish the actual provider entities and all processing/access locations, including support, security and delivery services. EU regions alone do not rule out international transfers. The pilot is US-hosted.
+- **Rights and erasure.** Pseudonymous records can remain personal data, so applicable visitor rights must be assessed as well as tenant and account-holder requests. The planned dashboard supports tenant-triggered erasure; backups expire within 35 days and erasure tombstones are reapplied before restored data serves traffic. Published ledger roots cannot be withdrawn. Removing stored summary text must preserve other tenants' proofs, and completion claims must explain backups and immutable commitments.
+- **Roles and purposes.** Tenant-directed analytics normally uses a controller–processor arrangement with an Article 28 agreement. SCF comparisons, funding decisions and independent reuse require their own purpose, role and legal-basis analysis. Operator access does not itself authorize independent reuse. Publish controller identities, privacy contacts, recipients, transfers and retention before onboarding.
 
 | Data | Retention |
 |---|---|
@@ -210,7 +213,7 @@ Tombstones take precedence over queue replay and are reapplied after any databas
 | Daily onchain counts | at least 24 months |
 | Daily seals (aggregate summaries and roots) | permanent |
 
-The full privacy and compliance strategy, the explicit data residency declaration and the jurisdiction-by-jurisdiction statement on where the solution would require user opt-in are published with the production launch.
+These are engineering retention targets. In particular, “at least 24 months” does not define a maximum for personal data. Before launch, set maximum periods or meaningful deletion criteria for aggregates, identity records, support, audit and provider security logs. Verify scheduled deletion, queue expiry, backup expiry and restore behavior. The full privacy strategy, actual residency/subprocessor register, signed processing arrangements and jurisdiction-specific consent assessment are launch requirements, not established by this architecture alone.
 
 ## 7. Security
 
